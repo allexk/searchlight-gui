@@ -1,7 +1,7 @@
 {
     "searchlight": {
         "sl": {
-            "max_probes": 1000,
+            "max_probes": 100,
             "probes_percentage": 0.1,
             "splits": 100,
             "probe_submit": 0,
