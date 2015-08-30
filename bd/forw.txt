@@ -1,0 +1,2 @@
+ssh -N -L localhost:8080:scidb07.cloud.llgrid.txe1.mit.edu:8080 akalinin@txe1-login.mit.edu
+ssh -N -L localhost:1239:scidb07.cloud.llgrid.txe1.mit.edu:1239 akalinin@txe1-login.mit.edu
