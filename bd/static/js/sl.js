@@ -20,6 +20,27 @@ $.searchlight.BD_URL = "http://localhost:8080/bigdawg";
 // Searchlight result URL (comes from request)
 $.searchlight.SL_URL = null;
 
+// generate table for the ICU stay
+$.searchlight.generate_icustay = function generate_icustay(tuple) {
+    var content = "<table class=\"table table-striped table-bordered\" cellspacing=\"0\" width=\"100%\">\
+                       <thead>\
+                          <tr>\
+                              <th>Patient ID</th>\
+                              <th>ICU Stay ID</th>\
+                              <th>Gender</th>\
+                              <th>DOB</th>\
+                              <th>In-Time</th>\
+                              <th>Out-Time</th>\
+                          </tr>\
+                       </thead>";
+    content += "<tbody><tr>";
+    for (var i = 0; i < 6; i++) {
+        content += "<td>" + tuple[i] + "</td>";
+    }
+    content += "</tr></tbody></table";
+    $("#icustay").empty().append(content);
+};
+
 // Resets state depending on the query status
 $.searchlight.sl_in_query = function sl_in_query(state) {
     $("#start_query").prop("disabled", state);
@@ -82,7 +103,7 @@ $.searchlight.sl_next_result = function sl_next_result() {
                 $.searchlight.sl_in_query(false);
             } else {
                 var result = data["result"];
-                $("#records").DataTable().row.add([result["id"], result["time"],
+                $("#records").DataTable().row.add([result["sid"], result["id"], result["pretty_time"], result["time"],
                     result["len"]]).draw();
                 sl_next_result();
             }
@@ -113,6 +134,32 @@ $.searchlight.sl_get_waveform = function sl_get_waveform(params) {
     });
 };
 
+$.searchlight.get_icustay = function get_icustay(patient_id) {
+    // prepare query
+    query_str = "SELECT e.subject_id, e.icustay_id, gender, dob, intime, outtime, height, weight_first\
+        FROM mimic2v26.icustayevents AS e, mimic2v26.icustay_detail AS d WHERE e.subject_id=" + patient_id +
+        " AND d.icustay_id = e.icustay_id LIMIT 1";
+    var bigdawg_query = {query: "RELATION(" + query_str + ")"};
+    bigdawg_query = JSON.stringify(bigdawg_query);
+    // then query
+    $.ajax({
+        url: $.searchlight.BD_URL + "/query",
+        type: "POST",
+        data: bigdawg_query,
+        dataType: "json",
+        contentType: "application/json; charset=utf-8",
+        cache: false,
+        success: function (data) {
+            // retrieve the tuple and put into table
+            icu_tuple = data["tuples"][0];
+            $.searchlight.generate_icustay(icu_tuple);
+        },
+        error: function (xhr, status, error) {
+            alert("Error getting data about ICU stay: ", xhr.responseText);
+        }
+    });
+};
+
 // Display waveform via Flot
 $.searchlight.sl_display_waveform = function sl_display_waveform(
         data, plot_label) {
@@ -129,8 +176,27 @@ $.searchlight.sl_display_waveform = function sl_display_waveform(
 
 // $(document).ready
 $(function() {
-    // Prepare table
-    var records_table = $("#records").DataTable();
+    // Prepare table (hide tick and record columns, which are used only for waveform retrieval)
+    var records_table = $("#records").DataTable({
+        "columnDefs": [
+            {
+                "targets": [4],
+                "render": function(data, type, row) {
+                    return data / 125; // Convert from ticks to seconds
+                }
+            },
+            {
+                "targets": [1],
+                "visible": false,
+                "searchable": false
+            },
+            {
+                "targets": [3],
+                "visible": false,
+                "searchable": false
+            }
+        ]
+    });
 
     // Toggle neighborhood elements
     $("#neighborhood").click(function() {
@@ -148,9 +214,10 @@ $(function() {
     // Table result click --- draw the waveform
     $("#records tbody").on("click", "tr", function() {
         var record = records_table.row(this).data();
-        var waveform_params = {"signal": $("#signal").val(), "id": record[0],
-                               "time": record[1], "len": record[2]};
+        var waveform_params = {"signal": $("#signal").val(), "id": record[1],
+                               "time": record[3], "len": record[4]};
         $.searchlight.sl_get_waveform(waveform_params);
+        $.searchlight.get_icustay(record[0]);
     });
 
     // Submit: create JSON and send to server
